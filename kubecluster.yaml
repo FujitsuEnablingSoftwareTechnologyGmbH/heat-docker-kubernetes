@@ -203,7 +203,7 @@ resources:
         str_replace:
           template: {get_file: fragments/custom-scripts.sh}
           params:
-            "$CUSTOM_SCRIPTS_PATH": " /usr/local/post-scripts"
+            "$CUSTOM_SCRIPTS_PATH": "/usr/local/post-scripts"
 
   provision_master:
     type: OS::Heat::SoftwareConfig
@@ -211,15 +211,29 @@ resources:
       group: ungrouped
       config: {get_file: fragments/master.sh}
 
+  install_k8s_services:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/install-k8s-services.sh}
+
+  enable_k8s_services:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/enable-k8s-services.sh}
+
   kube_master_init:
     type: OS::Heat::MultipartMime
     properties:
       parts:
         - config: {get_resource: write_heat_params}
         - config: {get_resource: kube_user}
+        - config: {get_resource: install_k8s_services}
         - config: {get_resource: pre_tasks}
         - config: {get_resource: provision_master}
         - config: {get_resource: post_tasks}
+        - config: {get_resource: enable_k8s_services}
         - config: {get_resource: master_wc_notify}
 
   ######################################################################
