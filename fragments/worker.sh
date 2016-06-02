@@ -52,8 +52,6 @@ if [ -z ${NODE_IP} ]; then
     NODE_IP=$(hostname -I | awk '{print $1}')
 fi
 
-echo "FLANNEL_IFACE is set to: ${FLANNEL_IFACE}"
-echo "FLANNEL_IPMASQ is set to: ${FLANNEL_IPMASQ}"
 echo "MASTER_IP is set to: ${MASTER_IP}"
 echo "NODE_IP is set to: ${NODE_IP}"
 echo "ARCH is set to: ${ARCH}"
@@ -108,8 +106,36 @@ DOCKER_CONF=""
 
 # Start k8s components in containers
 start_k8s() {
+
+	# Configure docker
+    case "${lsb_dist}" in
+        amzn)
+            DOCKER_CONF="/etc/sysconfig/docker"
+            ;;
+        centos)
+            DOCKER_CONF="/usr/lib/systemd/system/docker.service"
+            ;;
+        ubuntu|debian)
+            DOCKER_CONF="/etc/default/docker"
+            ;;
+        *)
+            echo "Unsupported operations system ${lsb_dist}"
+            exit 1
+            ;;
+    esac
+	
+	  
+    if command_exists systemctl; then
+        sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
+        systemctl daemon-reload
+        systemctl restart docker
+    fi
+	
+	sleep 5
+
+
     # Start flannel
-    flannelCID=$(docker -H unix:///var/run/docker-bootstrap.sock run \
+    docker run \
         -d \
         --restart=on-failure \
         --net=host \
@@ -119,60 +145,8 @@ start_k8s() {
         /opt/bin/flanneld \
             --ip-masq="${FLANNEL_IPMASQ}" \
             --etcd-endpoints=http://${MASTER_IP}:4001 \
-            --iface="${FLANNEL_IFACE}")
+            --iface="${FLANNEL_IFACE}"
 
-    sleep 10
-
-    echo "flannelCID  ${flannelCID}"
-
-    # Copy flannel env out and source it on the host
-    docker -H unix:///var/run/docker-bootstrap.sock \
-        cp ${flannelCID}:/run/flannel/subnet.env .
-    source subnet.env
-
-    # Configure docker net settings, then restart it
-    case "${lsb_dist}" in
-        centos)
-            DOCKER_CONF="/usr/lib/systemd/system/docker.service"
-            sed -i "/^ExecStart=/ s~$~ --mtu=${FLANNEL_MTU} --bip=${FLANNEL_SUBNET}~" ${DOCKER_CONF}
-            sed -i.bak 's/^\(MountFlags=\).*/\1shared/' ${DOCKER_CONF}
-            systemctl daemon-reload
-            if ! command_exists ifconfig; then
-                yum -y -q install net-tools
-            fi
-            ifconfig docker0 down
-            yum -y -q install bridge-utils && brctl delbr docker0 && systemctl restart docker
-            ;;
-        amzn)
-            DOCKER_CONF="/etc/sysconfig/docker"
-            echo "OPTIONS=\"\$OPTIONS --mtu=${FLANNEL_MTU} --bip=${FLANNEL_SUBNET}\"" | tee -a ${DOCKER_CONF}
-            ifconfig docker0 down
-            yum -y -q install bridge-utils && brctl delbr docker0 && service docker restart
-            ;;
-        ubuntu|debian) # TODO: today ubuntu uses systemd. Handle that too
-            DOCKER_CONF="/etc/default/docker"
-            echo "DOCKER_OPTS=\"\$DOCKER_OPTS --mtu=${FLANNEL_MTU} --bip=${FLANNEL_SUBNET}\"" | tee -a ${DOCKER_CONF}
-            ifconfig docker0 down
-            apt-get install bridge-utils
-            brctl delbr docker0
-            service docker stop
-            while [ `ps aux | grep /usr/bin/docker | grep -v grep | wc -l` -gt 0 ]; do
-                echo "Waiting for docker to terminate"
-                sleep 1
-            done
-            service docker start
-            ;;
-        *)
-            echo "Unsupported operations system ${lsb_dist}"
-            exit 1
-            ;;
-    esac
-
-    # sleep a little bit
-    sleep 5
-
-    # Start kubelet & proxy in container
-    # TODO: Use secure port for communication
 
     mkdir -p /var/lib/kubelet
     mount --bind /var/lib/kubelet /var/lib/kubelet
@@ -217,7 +191,6 @@ set_docker_registry(){
 	if [[ -n ${DOCKER_REGISTRY_PREFIX} ]]; then
 	  HYPERKUBE_IMAGE=${DOCKER_REGISTRY_PREFIX}/${HYPERKUBE_IMAGE}
 	  PAUSE_IMAGE=${DOCKER_REGISTRY_PREFIX}/${PAUSE_IMAGE}
-	  FLANNEL_IMAGE=${DOCKER_REGISTRY_PREFIX}/${FLANNEL_IMAGE}
 	fi
 
     case "${lsb_dist}" in
