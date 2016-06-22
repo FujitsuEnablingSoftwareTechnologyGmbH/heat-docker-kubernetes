@@ -73,16 +73,7 @@ docker run -d \
 sleep 3
 
 echo "Running kubelet ..."
-# systemctl daemon-reload
-# systemctl start kubelet
-# systemctl enable kubelet
-# systemctl status kubelet
-/usr/bin/hyperkube kubelet \
-    --allow-privileged=true \
-    --hostname-override=${MASTER_IP} \
-    --address="0.0.0.0" \
-    --api-servers=http://localhost:8080 \
-    --config=/etc/kubernetes/manifests \
-    --network-plugin=cni \
-    --network-plugin-dir=/etc/cni/net.d \
-    --v=2
+systemctl daemon-reload
+systemctl start kubelet
+systemctl enable kubelet
+systemctl status kubelet

@@ -9,7 +9,7 @@ fi
 cp /hyperkube /hostfs/usr/bin/
 
 # copy kubelet service configuration
-cp /setup/kubelet.service /etc/systemd/system/
+cp /setup/kubelet.service /hostfs/etc/systemd/system/
 
 if [ "$node" == "master" ]; then
   # clean up old configuration
