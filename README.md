@@ -1,6 +1,6 @@
 # Getting started with k8s-docker-provisioner
 
-This guide will take you through the steps of deploying Kubernetes to Openstack using docker.
+This guide will take you through the steps of deploying Kubernetes to bare metal or Openstack using docker.
 
 ## Setup on Bare Metal
 
