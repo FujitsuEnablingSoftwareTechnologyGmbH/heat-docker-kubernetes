@@ -22,33 +22,35 @@ set -e
 START_MODE=$1
 
 init() {
-	# Make sure docker daemon is running
-    if ( ! ps -ef | grep "/usr/bin/docker" | grep -v 'grep' &> /dev/null ); then
-        echo "Docker is not running on this machine!"
-        exit 1
-    fi
+	# Make sure docker daemon is running.
+	if ( ! ps -ef | grep "/usr/bin/docker" | grep -v 'grep' &> /dev/null ); then
+		echo "Docker is not running on this machine!"
+		exit 1
+	fi
 
-	# Run as root
+	# Run as root.
 	if [ "$(id -u)" != "0" ]; then
 		echo >&2 "Please run as root"
 		exit 1
 	fi
 
-	# Make sure master ip is properly set
+	# Make sure master ip is properly set.
 	if [ -z ${MASTER_IP} ]; then
 		MASTER_IP=$(hostname -I | awk '{print $1}')
 	fi
 
-	# Set working mode
+	# Set working mode.
 	if [[ -n ${START_MODE} && ${START_MODE} == "install" ]]; then
-		echo "Start k8s cluster in installation mode"
+		echo "Installing k8s cluster as a service on host."
+		RUN_MODE="service"
 		RESTART_POLICY="always"
 	else
-		echo "Start k8s cluster in run mode"
+		echo "Starting k8s cluster in run mode. Will not restart on reboot."
+		RUN_MODE="hyperkube"
 		RESTART_POLICY="no"
 	fi
 
-	# Make sure k8s images are properly set
+	# Make sure k8s images are properly set.
 	ETCD_IMAGE=${ETCD_IMAGE:-gcr.io/google_containers/etcd-amd64:2.2.1}
 	FLANNEL_IMAGE=${FLANNEL_IMAGE:-quay.io/coreos/flannel:0.5.5}
 	HYPERKUBE_IMAGE=${HYPERKUBE_IMAGE:-fest/hyperkube-amd64:latest}
@@ -62,7 +64,7 @@ init() {
 		PAUSE_IMAGE=${DOCKER_REGISTRY_PREFIX}/${PAUSE_IMAGE}
 	fi
 
-	# Make sure k8s version env is properly set
+	# Make sure k8s version env is properly set.
 	FLANNEL_IPMASQ=${FLANNEL_IPMASQ:-"true"}
 	FLANNEL_IFACE=${FLANNEL_IFACE:-"eth0"}
 	ARCH=${ARCH:-"amd64"}
@@ -86,12 +88,12 @@ init() {
 	echo "OS distribution is set to: ${lsb_dist}"
 }
 
-# Check if a command is valid
+# Check if a command is valid.
 command_exists() {
     command -v "$@" > /dev/null 2>&1
 }
 
-# Detect the OS distro, we support ubuntu, debian, mint, centos, fedora dist
+# Detect the OS distro, we support ubuntu, debian, mint, centos, fedora dist.
 detect_lsb() {
     # TODO: remove this when ARM support is fully merged
     case "$(uname -m)" in
@@ -131,7 +133,49 @@ detect_lsb() {
     esac
 }
 
-start_k8s(){
+configure_docker(){
+	  # Configure docker settings, then restart it.
+    case "${lsb_dist}" in
+        amzn)
+            DOCKER_CONF="/etc/sysconfig/docker"
+            sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
+            service docker restart
+            ;;
+        centos)
+            DOCKER_CONF="/usr/lib/systemd/system/docker.service"
+            sed -i.bak 's/^\(MountFlags=\).*/\1shared/' ${DOCKER_CONF}
+            # Add support for docker registry
+            if [[ -n ${DOCKER_REGISTRY_URL} ]]; then
+         sed -i "/^ExecStart=/ s~$~ --insecure-registry=${DOCKER_REGISTRY_URL}~" ${DOCKER_CONF}
+       fi
+            systemctl daemon-reload
+            systemctl restart docker
+            ;;
+        ubuntu|debian)
+            if command_exists systemctl; then
+              DOCKER_CONF=$(systemctl cat docker | head -1 | awk '{print $2}')
+              sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
+              systemctl daemon-reload
+              systemctl restart docker
+            else
+              DOCKER_CONF="/etc/default/docker"
+              sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
+              service docker stop
+              while [ `ps aux | grep /usr/bin/docker | grep -v grep | wc -l` -gt 0 ]; do
+                 echo "Waiting for docker to terminate"
+                 sleep 1
+              done
+              service docker start
+            fi
+            ;;
+        *)
+            echo "Unsupported operations system ${lsb_dist}"
+            exit 1
+            ;;
+    esac
+}
+
+setup_cluster_connectivity(){
     # Start etcd
     docker run \
         --restart=${RESTART_POLICY} \
@@ -169,8 +213,8 @@ start_k8s(){
             --ip-masq="${FLANNEL_IPMASQ}" \
             --iface="${FLANNEL_IFACE}"
 
-	# Wait for the flannel subnet.env file to be created instead of a timeout. This is faster and more reliable
-	local SECONDS=0
+  # Wait for the flannel subnet.env file to be created instead of a timeout. This is faster and more reliable
+  local SECONDS=0
 	while [[ ! -f ${FLANNEL_SUBNET_DIR}/subnet.env ]]; do
 		if [[ ${SECONDS} == ${TIMEOUT_FOR_SERVICES} ]]; then
 			echo "flannel failed to start. Exiting..."
@@ -178,8 +222,10 @@ start_k8s(){
 		fi
 		sleep 1
 	done
+}
 
-    # Start kubelet and then start master components as pods
+# Start k8s components in a hyperkube container.
+start_k8s_as_hyperkube(){
     mkdir -p /var/lib/kubelet
     mount --bind /var/lib/kubelet /var/lib/kubelet
     mount --make-shared /var/lib/kubelet
@@ -211,46 +257,24 @@ start_k8s(){
             --network-plugin-dir=/etc/cni/net.d
 }
 
-configure_docker(){
-	# Configure docker settings, then restart it
-    case "${lsb_dist}" in
-        amzn)
-            DOCKER_CONF="/etc/sysconfig/docker"
-            sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
-            service docker restart
-            ;;
-        centos)
-            DOCKER_CONF="/usr/lib/systemd/system/docker.service"
-            sed -i.bak 's/^\(MountFlags=\).*/\1shared/' ${DOCKER_CONF}
-            # Add support for docker registry
-            if [[ -n ${DOCKER_REGISTRY_URL} ]]; then
-			  sed -i "/^ExecStart=/ s~$~ --insecure-registry=${DOCKER_REGISTRY_URL}~" ${DOCKER_CONF}
-			fi
-            systemctl daemon-reload
-            systemctl restart docker
-            ;;
-        ubuntu|debian)
-            if command_exists systemctl; then
-              DOCKER_CONF=$(systemctl cat docker | head -1 | awk '{print $2}')
-              sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
-              systemctl daemon-reload
-              systemctl restart docker
-            else
-              DOCKER_CONF="/etc/default/docker"
-              sed -i.bak 's/^\(MountFlags=\).*/\1shared/' $DOCKER_CONF
-              service docker stop
-              while [ `ps aux | grep /usr/bin/docker | grep -v grep | wc -l` -gt 0 ]; do
-                 echo "Waiting for docker to terminate"
-                 sleep 1
-              done
-              service docker start
-            fi
-            ;;
-        *)
-            echo "Unsupported operations system ${lsb_dist}"
-            exit 1
-            ;;
-    esac
+# Install k8s as a systemd service directly on host.
+start_k8s_as_service(){
+    echo "Installing k8s as a service ..."
+    docker run -d \
+        --volume=/:/hostfs:rw \
+        --net=host \
+        --pid=host \
+        --privileged \
+        taimir93/hyperkube-amd64:v1.3.0-beta.2 \
+        /setup/install.sh master localhost ${MASTER_IP} ${PAUSE_IMAGE}
+
+    sleep 3
+
+    echo "Running kubelet ..."
+    systemctl daemon-reload
+    systemctl start kubelet
+    systemctl enable kubelet
+    systemctl status kubelet
 }
 
 set -e
@@ -260,10 +284,12 @@ init
 
 echo "Configure docker ..."
 configure_docker
-
 sleep 5
 
+echo "Setting up cluster connectivity ..."
+setup_cluster_connectivity
+
 echo "Starting k8s ..."
-start_k8s
+start_k8s_as_${RUN_MODE}
 
 echo "Master done!"
