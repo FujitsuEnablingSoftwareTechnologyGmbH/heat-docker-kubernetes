@@ -53,21 +53,19 @@ docker run -d \
 echo "Installing CNI..."
 docker run -d \
     --volume=/:/hostfs:rw \
-    --volume=`pwd`:/setup:ro \
     --net=host \
     --pid=host \
     --privileged \
-    taimir93/hyperkube:1 \
+    taimir93/hyperkube:new \
     /setup/install_cni.sh
 
 echo "Installing kubernetes ..."
 docker run -d \
     --volume=/:/hostfs:rw \
-    --volume=`pwd`:/setup:ro \
     --net=host \
     --pid=host \
     --privileged \
-    taimir93/hyperkube:1 \
+    taimir93/hyperkube:new \
     /setup/install_kubernetes.sh master
 
 sleep 3
