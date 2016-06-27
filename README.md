@@ -1,6 +1,6 @@
 # Getting started with k8s-docker-provisioner
 
-This guide will take you through the steps of deploying Kubernetes to Openstack using docker. The primary concept is described here: [docker-multinode](https://github.com/FujitsuEnablingSoftwareTechnologyGmbH/kubernetes/blob/master/docs/getting-started-guides/docker-multinode/master.md)
+This guide will take you through the steps of deploying Kubernetes to Openstack using docker.
 
 ## Setup on Bare Metal
 
