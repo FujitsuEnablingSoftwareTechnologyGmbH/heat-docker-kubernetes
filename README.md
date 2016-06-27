@@ -61,21 +61,7 @@ sudo cp kubectl /usr/local/bin
 
 ### Prepare Openstack image
 
-The provisioning works on any operating system that has a Docker >= 1.10 and Docker-bootstrap service installed. This service is used to
-run flannel network inside of Docker containers themselves.
-
-
-If you want to build your own image you can use this project: [k8s-nodeos-builder](https://github.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-nodeos-builder)
-
-You can download such a prepared image from here: [Download image](https://github.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-nodeos-builder/releases/download/0.1/k8s_nodeOS.qcow2.xz)
-
-Uncompress it and upload to your OpenStack.
-```
-curl -L https://github.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-nodeos-builder/releases/download/0.1/k8s_nodeOS.qcow2.xz -O
-unxz k8s_nodeOS.qcow2.xz
-source openrc-default.sh
-glance image-create --name centos7-docker --disk-format qcow2 --container-format bare --file k8s_nodeOS.qcow2
-```
+The provisioning works on any operating system that has a Docker >= 1.10  installed.
 
 Don't forget update IMAGE_ID variable in config-default.sh file.
 
