@@ -115,6 +115,7 @@ function run-heat-script() {
       --parameter dns_nameserver=${DNS_SERVER} \
       --parameter docker_registry_url=${DOCKER_REGISTRY_URL} \
       --parameter docker_registry_prefix=${DOCKER_REGISTRY_PREFIX} \
+      --parameter fixed_network_cidr=${NETWORK_CIDR} \
       --template kubecluster.yaml \
       ${STACK_NAME}
   else

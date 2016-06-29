@@ -18,6 +18,8 @@ MINION_FLAVOR=${MINION_FLAVOR:-m1.small}
 
 EXTERNAL_NETWORK=${EXTERNAL_NETWORK:-public}
 
+NETWORK_CIDR=${NETWORK_CIDR:-10.0.0.0/24}
+
 # Image id which will be used for kubernetes stack
 IMAGE_ID=${IMAGE_ID:-23b3ac80-3f08-4c0c-bb99-f323e8aa3565}
 
