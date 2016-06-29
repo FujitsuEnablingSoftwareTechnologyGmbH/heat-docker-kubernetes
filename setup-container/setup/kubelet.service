@@ -1,0 +1,20 @@
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/kubernetes/kubernetes
+
+[Service]
+ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
+ExecStart=/usr/bin/hyperkube kubelet \
+    --allow-privileged=true \
+    --hostname-override=127.0.0.1 \
+    --address=0.0.0.0 \
+    --api-servers=http://localhost:8080 \
+    --config=/etc/kubernetes/manifests \
+    --network-plugin=cni \
+    --network-plugin-dir=/etc/cni/net.d \
+    --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
