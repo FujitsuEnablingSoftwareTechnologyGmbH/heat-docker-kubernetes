@@ -7,7 +7,7 @@ This guide will take you through the steps of deploying Kubernetes to bare metal
 To setup master in your host 
 
 ```
-curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/master.sh | sudo sh
+curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/master.sh install | sudo sh
 ```
 
 To setup node in your host
