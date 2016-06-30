@@ -13,7 +13,7 @@ curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/
 To setup node in your host
 
 ```
-curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/worker.sh | sudo MASTER_IP=<your-master-ip> sh
+curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/worker.sh install | sudo MASTER_IP=<your-master-ip> sh
 ```
 
 
