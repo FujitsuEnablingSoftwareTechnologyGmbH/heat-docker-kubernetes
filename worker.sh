@@ -47,10 +47,12 @@ init() {
 
 	# Set working mode
 	if [[ -n ${START_MODE} && ${START_MODE} == "install" ]]; then
-		echo "Start k8s cluster in installation mode"
+		echo "Installing k8s cluster as a service on host."
+		RUN_MODE="service"
 		RESTART_POLICY="always"
 	else
-		echo "Start k8s cluster in run mode"
+		echo "Starting k8s cluster in run mode. Will not restart on reboot."
+		RUN_MODE="hyperkube"
 		RESTART_POLICY="no"
 	fi
 
@@ -135,68 +137,8 @@ detect_lsb() {
     esac
 }
 
-# Start k8s components in containers
-start_k8s() {
-    # Make sure there is no subnet.env from previous run.
-    if [[ -f ${FLANNEL_SUBNET_DIR}/subnet.env ]]; then
-		rm ${FLANNEL_SUBNET_DIR}/subnet.env
-    fi
-	# Start flannel
-    docker run \
-        -d \
-        --restart=${RESTART_POLICY} \
-        --net=host \
-        --privileged \
-        -v /dev/net:/dev/net \
-        -v ${FLANNEL_SUBNET_DIR}:${FLANNEL_SUBNET_DIR} \
-        ${FLANNEL_IMAGE} \
-        /opt/bin/flanneld \
-            --ip-masq="${FLANNEL_IPMASQ}" \
-            --etcd-endpoints=http://${MASTER_IP}:4001 \
-            --iface="${FLANNEL_IFACE}"
-
-	# Wait for the flannel subnet.env file to be created instead of a timeout. This is faster and more reliable
-	local SECONDS=0
-	while [[ ! -f ${FLANNEL_SUBNET_DIR}/subnet.env ]]; do
-		if [[ ${SECONDS} == ${TIMEOUT_FOR_SERVICES} ]]; then
-			echo "flannel failed to start. Exiting..."
-			exit
-		fi
-		sleep 1
-	done
-
-    mkdir -p /var/lib/kubelet
-    mount --bind /var/lib/kubelet /var/lib/kubelet
-    mount --make-shared /var/lib/kubelet
-
-    docker run \
-        --name=kubelet \
-        --volume=/:/rootfs:ro \
-        --volume=/sys:/sys:ro \
-        --volume=/var/lib/docker/:/var/lib/docker:rw \
-        --volume=/var/run:/var/run:rw \
-        --volume=/run:/run:rw \
-        --volume=/var/lib/kubelet:/var/lib/kubelet:shared \
-        --net=host \
-        --pid=host \
-        --privileged=true \
-        --restart=${RESTART_POLICY} \
-        -d \
-        ${HYPERKUBE_IMAGE} \
-        /hyperkube kubelet \
-            --hostname-override=${NODE_IP} \
-            --address="0.0.0.0" \
-            --api-servers=http://${MASTER_IP}:8080 \
-            --cluster-dns=10.0.0.10 \
-            --cluster-domain=cluster.local \
-            --allow-privileged=true --v=2  \
-            --pod-infra-container-image=${PAUSE_IMAGE} \
-            --network-plugin=cni \
-            --network-plugin-dir=/etc/cni/net.d
-}
-
 configure_docker(){
-	# Configure docker settings, then restart it
+		# Configure docker settings, then restart it
     case "${lsb_dist}" in
         amzn)
             DOCKER_CONF="/etc/sysconfig/docker"
@@ -237,15 +179,101 @@ configure_docker(){
     esac
 }
 
+setup_cluster_connectivity(){
+    # Make sure there is no subnet.env from previous run.
+    if [[ -f ${FLANNEL_SUBNET_DIR}/subnet.env ]]; then
+		rm ${FLANNEL_SUBNET_DIR}/subnet.env
+    fi
+	# Start flannel
+    docker run \
+        -d \
+        --restart=${RESTART_POLICY} \
+        --net=host \
+        --privileged \
+        -v /dev/net:/dev/net \
+        -v ${FLANNEL_SUBNET_DIR}:${FLANNEL_SUBNET_DIR} \
+        ${FLANNEL_IMAGE} \
+        /opt/bin/flanneld \
+            --ip-masq="${FLANNEL_IPMASQ}" \
+            --etcd-endpoints=http://${MASTER_IP}:4001 \
+            --iface="${FLANNEL_IFACE}"
+
+	# Wait for the flannel subnet.env file to be created instead of a timeout. This is faster and more reliable
+	local SECONDS=0
+	while [[ ! -f ${FLANNEL_SUBNET_DIR}/subnet.env ]]; do
+		if [[ ${SECONDS} == ${TIMEOUT_FOR_SERVICES} ]]; then
+			echo "flannel failed to start. Exiting..."
+			exit
+		fi
+		sleep 1
+	done
+}
+
+# Start k8s components in a hyperkube container.
+start_k8s_as_hyperkube() {
+    mkdir -p /var/lib/kubelet
+    mount --bind /var/lib/kubelet /var/lib/kubelet
+    mount --make-shared /var/lib/kubelet
+
+    docker run \
+        --name=kubelet \
+        --volume=/:/rootfs:ro \
+        --volume=/sys:/sys:ro \
+        --volume=/var/lib/docker/:/var/lib/docker:rw \
+        --volume=/var/run:/var/run:rw \
+        --volume=/run:/run:rw \
+        --volume=/var/lib/kubelet:/var/lib/kubelet:shared \
+        --net=host \
+        --pid=host \
+        --privileged=true \
+        --restart=${RESTART_POLICY} \
+        -d \
+        ${HYPERKUBE_IMAGE} \
+        /hyperkube kubelet \
+            --hostname-override=${NODE_IP} \
+            --address="0.0.0.0" \
+            --api-servers=http://${MASTER_IP}:8080 \
+            --cluster-dns=10.0.0.10 \
+            --cluster-domain=cluster.local \
+            --allow-privileged=true --v=2  \
+            --pod-infra-container-image=${PAUSE_IMAGE} \
+            --network-plugin=cni \
+            --network-plugin-dir=/etc/cni/net.d
+}
+
+# Install k8s as a systemd service directly on host.
+start_k8s_as_service(){
+	echo "Installing k8s as a service ..."
+	docker run -d \
+		--volume=/:/hostfs:rw \
+		--net=host \
+		--pid=host \
+		--privileged \
+		taimir93/hyperkube-amd64:v1.3.0-beta.2 \
+		/setup/install.sh minion ${MASTER_IP} ${NODE_IP} ${PAUSE_IMAGE}
+
+	sleep 3
+
+	echo "Running kubelet ..."
+	systemctl daemon-reload
+	systemctl start kubelet
+	systemctl enable kubelet
+	systemctl status kubelet
+}
+
+set -e
+
 echo "Checking prerequisites & initialize variable ..."
 init
 
-echo "Set docker registry"
+echo "Configure docker ..."
 configure_docker
-
 sleep 5
 
-echo "Starting k8s ..."
-start_k8s
+echo "Setting up cluster connectivity ..."
+setup_cluster_connectivity
 
-echo "Worker done!"
+echo "Starting k8s ..."
+start_k8s_as_${RUN_MODE}
+
+echo "Master done!"
