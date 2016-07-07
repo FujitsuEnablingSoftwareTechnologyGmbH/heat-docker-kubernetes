@@ -277,4 +277,4 @@ setup_cluster_connectivity
 echo "Starting k8s ..."
 start_k8s_as_${RUN_MODE}
 
-echo "Master done!"
+echo "Worker done!"
