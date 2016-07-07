@@ -124,6 +124,30 @@ function run-heat-script() {
   fi
 }
 
+function update-heat-script() {
+  local stack_status=$(openstack stack show ${STACK_NAME})
+
+  if [[ $stack_status ]]; then
+    echo "[INFO] Update stack ${STACK_NAME}"
+    openstack stack update --timeout 60 \
+      --parameter external_network=${EXTERNAL_NETWORK} \
+      --parameter ssh_key_name=${KUBERNETES_KEYPAIR_NAME} \
+      --parameter server_image=${IMAGE_ID} \
+      --parameter master_flavor=${MASTER_FLAVOR} \
+      --parameter minion_flavor=${MINION_FLAVOR} \
+      --parameter number_of_minions=${NUMBER_OF_MINIONS} \
+      --parameter max_number_of_minions=${MAX_NUMBER_OF_MINIONS} \
+      --parameter dns_nameserver=${DNS_SERVER} \
+      --parameter docker_registry_url=${DOCKER_REGISTRY_URL} \
+      --parameter docker_registry_prefix=${DOCKER_REGISTRY_PREFIX} \
+      --template kubecluster.yaml \
+      ${STACK_NAME}
+  else
+    echo "[INFO] Stack ${STACK_NAME} does not exist"
+    openstack stack show ${STACK_NAME}
+  fi
+}
+
 # Configure kubectl.
 #
 # Assumed vars:

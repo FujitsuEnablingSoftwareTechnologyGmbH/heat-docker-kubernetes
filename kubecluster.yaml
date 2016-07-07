@@ -297,6 +297,26 @@ resources:
 
   ######################################################################
   #
+  # 
+
+  vm_scaleup:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: kube_minions}
+      cooldown: 60
+      scaling_adjustment: 1
+
+  vm_scaledown:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: kube_minions}
+      cooldown: 60
+      scaling_adjustment: -1
+
+  ######################################################################
+  #
   # kubernetes minions. This is an autoscaling group that will initially
   # create <number_of_minions> minions, and will scale up to
   # <max_number_of_minions> based on CPU utilization.
@@ -349,3 +369,25 @@ outputs:
     value: {get_attr: [kube_minions, outputs_list, kube_minion_external_ip]}
     description: >
       Here is the list of the "public" addresses of all Kubernetes worker nodes.
+
+  scaleup_url:
+    value: {get_attr: [vm_scaleup, signal_url]}
+    description: >
+      Here is hook url of scaleup.
+
+  scaleup_url_by_cfn:
+    value: {get_attr: [vm_scaleup, alarm_url]}
+    description: >
+      Here is hook url of scaleup by using cloud cfn.
+
+  scaledown_url:
+    value: {get_attr: [vm_scaledown, signal_url]}
+    description: >
+      Here is hook url of scaledown.
+
+  scaledown_url_by_cfn:
+    value: {get_attr: [vm_scaledown, alarm_url]}
+    description: >
+      Here is hook url of scaledown by using cloud cfn.
+
+
