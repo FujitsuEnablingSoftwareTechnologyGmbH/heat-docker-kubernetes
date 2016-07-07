@@ -66,7 +66,8 @@ init() {
 
 	# Make sure k8s version env is properly set.
 	FLANNEL_IPMASQ=${FLANNEL_IPMASQ:-"true"}
-	FLANNEL_IFACE=${FLANNEL_IFACE:-"eth0"}
+	DEFAULT_NET_INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
+	FLANNEL_IFACE=${NET_INTERFACE:-${DEFAULT_NET_INTERFACE}}
 	ARCH=${ARCH:-"amd64"}
 
 	# Paths
