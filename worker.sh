@@ -250,7 +250,7 @@ start_k8s_as_service(){
 		--net=host \
 		--pid=host \
 		--privileged \
-		taimir93/hyperkube-amd64:v1.3.0-beta.2 \
+		${HYPERKUBE_IMAGE} \
 		/setup/install.sh minion ${MASTER_IP} ${NODE_IP} ${PAUSE_IMAGE}
 
 	sleep 3
