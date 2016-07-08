@@ -2,23 +2,43 @@
 
 This guide will take you through the steps of deploying Kubernetes to bare metal or Openstack using docker.
 
-## Setup on Bare Metal
+## Run on Bare Metal or VM
+Kubernetes will be launched on the machine, but no modification is done to the system. The cluster will not survive a reboot.
 
-To setup master in your host 
+Login to master and paste the following command:
+
+```
+curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/master.sh run | sudo sh
+```
+
+Login to worker and paste the following command:
+
+```
+curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/worker.sh run | sudo MASTER_IP=<your-master-ip> sh
+```
+
+
+## Install on Bare Metal or VM
+Kubernetes will be permanantly installed on the systems and automatically started after reboot.
+
+Login to master and paste the following command:
 
 ```
 curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/master.sh install | sudo sh
 ```
 
-To setup node in your host
-
+Login to worker and paste the following command:
 ```
 curl -s https://raw.githubusercontent.com/FujitsuEnablingSoftwareTechnologyGmbH/k8s-docker-provisioner/master/worker.sh install | sudo MASTER_IP=<your-master-ip> sh
 ```
 
 
-## Setup on OpenStack
+## Provision a Cluster on OpenStack
 
+The provisioning includes:
+* Virtual machines
+* Network
+* Installing Kubernetes on the VMs
 
 ### Pre-Requisites
 
