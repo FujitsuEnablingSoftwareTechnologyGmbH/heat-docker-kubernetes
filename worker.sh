@@ -234,7 +234,7 @@ start_k8s_as_hyperkube() {
 			--hostname-override=${NODE_IP} \
 			--address="0.0.0.0" \
 			--api-servers=http://${MASTER_IP}:8080 \
-			--cluster-dns=10.0.0.10 \
+			--cluster-dns=10.10.0.10 \
 			--cluster-domain=cluster.local \
 			--allow-privileged=true --v=2  \
 			--pod-infra-container-image=${PAUSE_IMAGE} \
